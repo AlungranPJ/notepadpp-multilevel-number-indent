@@ -1,6 +1,12 @@
 # Multilevel Number Indent for Notepad++
 
-Word-style multilevel numbering, in plain text, inside Notepad++.
+[![tests](https://img.shields.io/badge/tests-18%20passed-a6d189)](test/server.test.js)
+[![core](https://img.shields.io/badge/core-3.3.12-ca9ee6)](https://github.com/AlungranPJ/obsidian-multilevel-number-indent)
+[![release](https://img.shields.io/github/v/release/AlungranPJ/notepadpp-multilevel-number-indent?color=8caaee)](https://github.com/AlungranPJ/notepadpp-multilevel-number-indent/releases/latest)
+
+**English** · [ภาษาไทย](docs/README.th.md)
+
+You know that numbered list in Word, where Tab turns `2.` into `1.1.` and everything below fixes itself? This is that, for Notepad++, in plain text.
 
 ```
 1. top
@@ -13,61 +19,108 @@ Word-style multilevel numbering, in plain text, inside Notepad++.
 			2) e
 ```
 
-This is the Notepad++ side of [Multilevel Number Indent](https://github.com/AlungranPJ/obsidian-multilevel-number-indent).
-It does not have its own numbering rules. It runs the Obsidian plugin's engine (`main.js`, copied here as `server/mni-core.js`), so both editors number a list exactly the same way, and every fix to the plugin lands here with one `npm run sync-core`.
+No hidden formatting, no special file type. It's just text, so it still looks right in email, Git, chat, anywhere.
 
-## What you get
+It started life as an [Obsidian plugin](https://github.com/AlungranPJ/obsidian-multilevel-number-indent). Rather than write the numbering rules a second time (and get them subtly different), this port runs the exact same engine. A list numbered in Obsidian and a list numbered in Notepad++ come out identical.
+
+## Install
+
+You need Windows, [Notepad++](https://notepad-plus-plus.org) and [Node.js](https://nodejs.org) (the installer offers to install Node for you).
+
+**The easy way.** Download [`npp-multilevel-number-indent.zip`](https://github.com/AlungranPJ/notepadpp-multilevel-number-indent/releases/latest/download/npp-multilevel-number-indent.zip), unzip it, and double-click **`install.cmd`**.
+
+**Or one line in PowerShell:**
+
+```powershell
+irm https://github.com/AlungranPJ/notepadpp-multilevel-number-indent/releases/latest/download/install.ps1 | iex
+```
+
+Either way, the installer:
+
+1. finds Notepad++ and politely asks to close it (Notepad++ rewrites its settings when it closes, so editing them while it runs is pointless),
+2. checks for Node.js,
+3. installs the **PythonScript 3** plugin if you don't have it. This is the one step where Windows asks for admin, because Notepad++ only loads plugins from `Program Files`,
+4. copies the engine into `%APPDATA%\Notepad++\plugins\config`,
+5. adds the menu entries.
+
+Every Notepad++ file it touches is saved as `*.mni-backup` first. Then open Notepad++, type `1. ` in a `.txt` file and press Enter. That's it.
+
+> **Why not Plugins Admin?** Plugins Admin offers PythonScript 2.1, which is Python 2. This needs PythonScript 3, so the installer fetches 3.0.27 from [its GitHub releases](https://github.com/bruderstein/PythonScript/releases).
+
+To remove it, double-click `uninstall.cmd`. PythonScript stays, in case your other scripts use it.
+
+## Keys
 
 | Key | On a numbered line |
 |---|---|
-| <kbd>Enter</kbd> | the next number at the same level, caret after it |
-| <kbd>Tab</kbd> | one level in (`2.` → `1.1.`), numbers fixed below |
+| <kbd>Enter</kbd> | next number at the same level, caret right after it |
+| <kbd>Tab</kbd> | one level in (`2.` → `1.1.`), numbers below fixed |
 | <kbd>Shift</kbd>+<kbd>Tab</kbd> | one level out |
-| <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | swap with the item above or below, children travel along |
+| <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | swap with the item above or below, children come along |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd> | undo the whole move in one go |
 
-Select several items first and Tab, Shift+Tab and Alt+↑/↓ move the whole group together, and the group stays selected so you can press again.
+Select a few items first and Tab, Shift+Tab and Alt+↑/↓ move the whole group. The group stays selected, so you can keep pressing.
 
-Right-click → **Multilevel list section** has: Reset numbering, Add numbering, Remove numbering, Clear formatting, Tidy up list, Convert to numbered list, Change list level, Number headings, Remove heading numbers, Copy as plain text. The same commands, plus **Numbering keys on or off**, sit under Plugins → Python Script → Scripts.
+It only steps in on numbered lines in `.txt`, `.md` and untitled files. In code files, on lines without a number, with column selection or several carets, or while autocomplete is open, every key does exactly what Notepad++ always did.
 
-It only steps in on numbered lines in plain text and Markdown files (`.txt`, `.md`, untitled "Normal text"). In code files, on lines without a number, with column or multi-caret selections, or while autocomplete is open, every key does what Notepad++ always did. One <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes one move.
+## Right-click menu
+
+Right-click → **Multilevel list section**:
+
+| Command | What it does |
+|---|---|
+| Reset numbering | renumber the list from the top, fixing gaps and repeats |
+| Add numbering | number the selected lines |
+| Remove numbering | take the numbers off, keep the text |
+| Clear formatting | remove numbers and indentation |
+| Tidy up list | even out indentation and numbers |
+| Convert to numbered list | turn pasted bullets or other outlines into this format |
+| Change list level | move an item to a level you type in |
+| Number headings | number Markdown `#` headings like `1.`, `1.1.` |
+| Remove heading numbers | take those numbers off again |
+| Copy as plain text | copy the selection without numbers |
+
+The same list, plus **Numbering keys on or off**, is under Plugins → Python Script → Scripts, so you can give any of them a shortcut in Settings → Shortcut Mapper.
+
+## Settings
+
+`%APPDATA%\Notepad++\plugins\config\MultilevelNumberIndent\settings.json`
+
+```json
+{
+  "enabled": true,
+  "node": "C:\\Program Files\\nodejs\\node.exe",
+  "formats": ["1.", "1.1.", "1.1.1.", "1)", "1.1)", "1.1.1)"]
+}
+```
+
+`formats` is one entry per level, the same format list as the Obsidian plugin's setting. Restart Notepad++ after editing it.
+
+## When something is off
+
+- **Keys do nothing:** check `mni.log` next to `settings.json`. It should say `engine ready`. If it says Node wasn't found, fix `node` in `settings.json`.
+- **No "Multilevel list section" in the menu:** Notepad++ was open while installing. Close it and run `install.cmd` again.
+- **Turn it off for a while:** Plugins → Python Script → Scripts → Numbering keys on or off.
 
 ## How it works
 
 ```
-Notepad++ ──key──▶ PythonScript (mni_npp.py) ──JSON line──▶ node mni-server.js ──▶ main.js core
-          ◀──one undo step── replace changed lines ◀──────────── { change, sel } ◀──┘
+Notepad++ ─key─▶ PythonScript (mni_npp.py) ─JSON line─▶ node mni-server.js ─▶ main.js core
+          ◀─one undo step─ changed lines replaced ◀──── { change, sel } ◀──────┘
 ```
 
-- `pythonscript/mni_npp.py` subclasses the two editor windows and catches Tab, Shift+Tab and Enter. Notepad++ maps Alt+↑/↓ to "call tip previous/next" before the editor sees them, so those two arrive as menu commands on the main window and are caught there (only while no call tip is showing).
-- `server/mni-server.js` loads `mni-core.js` with the Obsidian modules stubbed and answers one JSON line per request. It is started once and kept running, so a key costs one round trip.
-- Only the lines that changed are rewritten, inside one undo action.
-
-## Install
-
-Needs Notepad++ 8.x (64-bit), Node.js, and Python 3 for the installer.
-
-1. Download `PythonScript_Full_3.0.x_x64_PluginAdmin.zip` from [PythonScript releases](https://github.com/bruderstein/PythonScript/releases) and unzip it. The 2.x build in Plugins Admin is Python 2 and will not work.
-2. **Close Notepad++.**
-3. Run:
-
-   ```
-   python install.py --pythonscript C:\path\to\unzipped\PythonScript
-   ```
-
-   Windows asks for admin once, to copy PythonScript into `C:\Program Files\Notepad++\plugins`. Everything else goes into `%APPDATA%\Notepad++`. Files it edits are saved as `*.mni-backup` first.
-4. Open Notepad++. `plugins\config\MultilevelNumberIndent\mni.log` should say `engine ready`.
-
-Settings live in `%APPDATA%\Notepad++\plugins\config\MultilevelNumberIndent\settings.json`: `enabled`, `node` (path to node.exe), and `formats` (the same list format as the Obsidian setting).
+`mni_npp.py` listens on the two editor windows for Tab, Shift+Tab and Enter. Alt+↑/↓ are a Notepad++ shortcut (call tip previous/next), so the editor never sees them. They're picked up on the main window instead, and only while no call tip is showing. `mni-server.js` keeps the engine loaded, so each key costs one quick round trip. Only the lines that changed are rewritten.
 
 ## Develop
 
 ```
 npm run sync-core   # copy main.js from ../obsidian-nested-outline
-npm test            # engine and protocol tests
+npm test            # engine + protocol tests
+npm run build       # dist/npp-multilevel-number-indent.zip
 ```
 
-`docs/manual-test.md` lists the in-app checks.
+In-app checks are in [`docs/manual-test.md`](docs/manual-test.md).
 
 ## Licence
 
-MIT
+MIT. PythonScript is GPL-2.0 and downloaded from its own releases, not bundled here.

@@ -6,6 +6,7 @@
   "license": "MIT",
   "scripts": {
     "sync-core": "node scripts/sync-core.js",
-    "test": "node test/server.test.js"
+    "test": "node test/server.test.js",
+    "build": "node scripts/build.js"
   }
 }
