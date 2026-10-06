@@ -151,16 +151,20 @@ function handle(req) {
 module.exports = { handle, lineChange, core };
 
 if (require.main === module) {
+	if (process.argv.includes("--check")) {
+		fs.writeSync(1, JSON.stringify(handle({ op: "ping" })) + "\n");
+		process.exit(0);
+	}
 	const rl = readline.createInterface({ input: process.stdin });
 	rl.on("line", (line) => {
 		let reply;
 		try {
-			const req = JSON.parse(line);
+			// Some shells (Windows PowerShell with a UTF-8 $OutputEncoding) put a BOM in front of piped text.
+			const req = JSON.parse(line.replace(/^\uFEFF/, ""));
 			reply = Object.assign({ id: req.id }, handle(req));
 		} catch (e) {
 			reply = { handled: false, error: String((e && e.stack) || e) };
 		}
 		process.stdout.write(JSON.stringify(reply) + "\n");
 	});
-	if (process.argv.includes("--check")) fs.writeSync(1, JSON.stringify(handle({ op: "ping" })) + "\n");
 }

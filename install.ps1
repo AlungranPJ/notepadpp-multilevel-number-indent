@@ -251,7 +251,7 @@ function Main {
 
     Step 'Copying the engine and scripts'
     $mni = Install-Files $src $userDir $node
-    $check = ('{"op":"ping"}' | & $node (Join-Path $mni 'mni-server.js')) | Select-Object -First 1
+    $check = (& $node (Join-Path $mni 'mni-server.js') --check 2>&1 | Out-String).Trim()
     if ($check -notmatch '"handled":true') { Fail "The engine did not answer: $check" }
     Say "engine OK: $check"
 

@@ -104,5 +104,15 @@ console.log("the stdin/stdout protocol");
 	check("a bad line gets an error, not a crash", replies[1].handled === false && typeof replies[1].error, "string");
 }
 
+console.log("a byte order mark in front of a request");
+{
+	const srv = path.join(__dirname, "..", "server", "mni-server.js");
+	const p = spawnSync(process.execPath, [srv], { input: "\uFEFF" + JSON.stringify({ id: 1, op: "ping" }) + "\n", encoding: "utf8" });
+	const reply = JSON.parse(p.stdout.trim());
+	check("a BOM from PowerShell is ignored", reply.handled, true);
+	const c = spawnSync(process.execPath, [srv, "--check"], { encoding: "utf8", timeout: 10000 });
+	check("--check answers and exits without stdin", JSON.parse(c.stdout.trim()).handled, true);
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 if (failed) process.exit(1);

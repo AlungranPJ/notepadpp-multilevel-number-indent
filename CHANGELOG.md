@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 (2026-10-01)
+
+- Fixed the installer stopping at "The engine did not answer" on some PCs. Their PowerShell put an invisible byte order mark in front of the test message. The engine now ignores it, and the installer checks the engine without a pipe.
+
 ## 0.1.0 (2026-10-01)
 
 First release. Notepad++ gets the same multilevel numbering as the Obsidian plugin.
