@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2 (2026-10-06)
+
+Found by trying to break it.
+
+- A stuck numbering engine can no longer freeze Notepad++. Each key waits at most 3 seconds; after a failure the keys go back to Notepad++ for 30 seconds, then the engine is started again. Engine errors are written to `engine-errors.log`.
+- `settings.json` saved with a BOM or as UTF-16 (Windows Notepad does this), or with a typo, no longer switches the keys off. It is read tolerantly, and a file that cannot be read means the defaults plus a line in `mni.log`.
+- A `node` path that no longer exists falls back to Node.js on PATH.
+- A very large text file (over 4 MB) is no longer copied on every Tab or Enter.
+- Installer: a damaged `settings.json` is saved as `settings.json.damaged` and replaced instead of stopping the install; says so when `enabled` is false; finds Notepad++ from the running process and from HKCU too (portable copies); removes its temporary download folders.
+- Tests: 20 engine tests plus 13 for the Python side (`npm test` runs both). `test/npp_drive.py` drives a real Notepad++ window for in-app checks.
+
 ## 0.1.1 (2026-10-01)
 
 - Fixed the installer stopping at "The engine did not answer" on some PCs. Their PowerShell put an invisible byte order mark in front of the test message. The engine now ignores it, and the installer checks the engine without a pipe.

@@ -1,6 +1,6 @@
 # Multilevel Number Indent for Notepad++
 
-[![tests](https://img.shields.io/badge/tests-18%20passed-a6d189)](test/server.test.js)
+[![tests](https://img.shields.io/badge/tests-33%20passed-a6d189)](test/server.test.js)
 [![core](https://img.shields.io/badge/core-3.3.12-ca9ee6)](https://github.com/AlungranPJ/obsidian-multilevel-number-indent)
 [![release](https://img.shields.io/github/v/release/AlungranPJ/notepadpp-multilevel-number-indent?color=8caaee)](https://github.com/AlungranPJ/notepadpp-multilevel-number-indent/releases/latest)
 

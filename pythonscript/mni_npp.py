@@ -14,10 +14,12 @@ to Notepad++ exactly as before.
 import ctypes
 import json
 import os
+import queue
 import shutil
 import subprocess
 import sys
 import threading
+import time
 import traceback
 from ctypes import wintypes
 
@@ -99,13 +101,37 @@ def log(msg):
         sys.stderr.write("[MNI] " + msg + "\n")
 
 
+DEFAULT_FORMATS = ["1.", "1.1.", "1.1.1.", "1)", "1.1)", "1.1.1)"]
+_warned = set()
+
+
+def _warn_once(msg):
+    if msg not in _warned:
+        _warned.add(msg)
+        log(msg)
+
+
 def settings():
+    """settings.json, or the defaults when it is missing or cannot be read.
+
+    Editors love to save JSON with a BOM or as UTF-16; neither may stop the keys.
+    """
     data = {}
-    if os.path.exists(SETTINGS_FILE):
-        with open(SETTINGS_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-    data.setdefault("enabled", True)
-    data.setdefault("formats", ["1.", "1.1.", "1.1.1.", "1)", "1.1)", "1.1.1)"])
+    try:
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, "rb") as f:
+                raw = f.read()
+            text = raw.decode("utf-16") if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else raw.decode("utf-8-sig")
+            data = json.loads(text)
+            if not isinstance(data, dict):
+                raise ValueError("expected a JSON object")
+    except (OSError, ValueError) as e:  # JSONDecodeError and UnicodeDecodeError are ValueErrors
+        _warn_once("settings.json could not be read (%s); using the defaults" % e)
+        data = {}
+    data["enabled"] = bool(data.get("enabled", True))
+    formats = data.get("formats")
+    if not (isinstance(formats, list) and formats and all(isinstance(x, str) for x in formats)):
+        data["formats"] = list(DEFAULT_FORMATS)
     return data
 
 
@@ -113,46 +139,89 @@ def settings():
 
 
 def _node():
-    found = settings().get("node") or shutil.which("node")
-    if found and os.path.exists(found):
-        return found
-    raise RuntimeError("Node.js was not found; set \"node\" in " + SETTINGS_FILE)
+    for found in (settings().get("node"), shutil.which("node")):
+        if found and os.path.exists(found):
+            return found
+    raise EngineDown("Node.js was not found; set \"node\" in " + SETTINGS_FILE)
+
+
+ASK_TIMEOUT = 3.0   # seconds a key may wait for the engine; this runs on Notepad++'s UI thread
+PAUSE_AFTER_FAILURE = 30.0
+
+
+class EngineDown(RuntimeError):
+    """The engine is not available right now; the key goes back to Notepad++."""
+
+
+def _pump(proc, replies):
+    for line in proc.stdout:
+        replies.put(line)
+    replies.put(None)  # the engine went away
 
 
 def _server():
     proc = _state["server"]
     if proc is not None and proc.poll() is None:
         return proc
+    try:
+        errors = open(os.path.join(HOME, "engine-errors.log"), "ab")
+    except OSError:
+        errors = subprocess.DEVNULL
     proc = subprocess.Popen(
         [_node(), os.path.join(HOME, "mni-server.js")],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stderr=errors,
         creationflags=0x08000000,  # CREATE_NO_WINDOW
         text=True,
         encoding="utf-8",
         bufsize=1,
     )
+    if errors is not subprocess.DEVNULL:
+        errors.close()  # the engine has its own copy of the handle
     _state["server"] = proc
+    _state["replies"] = queue.Queue()
+    threading.Thread(target=_pump, args=(proc, _state["replies"]), daemon=True).start()
     return proc
 
 
+def _drop_server():
+    proc = _state["server"]
+    _state["server"] = None
+    if proc is not None:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
+
 def ask(req):
-    """One request, one reply. Restarts the engine once if it went away."""
+    """One request, one reply. Restarts the engine once if it went away, and
+    never waits longer than ASK_TIMEOUT: a stuck engine must not freeze typing."""
+    if time.time() < _state.get("paused_until", 0):
+        raise EngineDown("the numbering engine is paused after a failure")
     line = json.dumps(req, ensure_ascii=False) + "\n"
     with _lock:
         for attempt in (1, 2):
             proc = _server()
+            replies = _state["replies"]
+            while not replies.empty():  # a late answer to an earlier request
+                replies.get_nowait()
             try:
                 proc.stdin.write(line)
                 proc.stdin.flush()
-                reply = proc.stdout.readline()
+                reply = replies.get(timeout=ASK_TIMEOUT)
+            except queue.Empty:
+                _drop_server()
+                _state["paused_until"] = time.time() + PAUSE_AFTER_FAILURE
+                raise EngineDown("the numbering engine did not answer in %.0f s; paused for %.0f s" % (ASK_TIMEOUT, PAUSE_AFTER_FAILURE))
             except OSError:
-                reply = ""
+                reply = None
             if reply:
                 return json.loads(reply)
-            _state["server"] = None
-    raise RuntimeError("the numbering engine did not answer")
+            _drop_server()
+    _state["paused_until"] = time.time() + PAUSE_AFTER_FAILURE
+    raise EngineDown("the numbering engine keeps stopping; see engine-errors.log")
 
 
 # ---------------------------------------------------------- the document ---
@@ -169,9 +238,11 @@ class Doc(object):
         self.hwnd = hwnd
         n = _send(hwnd, SCI_GETLENGTH)
         self.too_big = n > MAX_BYTES
+        if self.too_big:  # never copy a huge file on every key press
+            self.lines, self.enc, self.eol, self.indent = [""], "utf-8", "\n", "\t"
+            return
         buf = ctypes.create_string_buffer(n + 1)
-        if not self.too_big:
-            _send(hwnd, SCI_GETTEXT, n + 1, ctypes.addressof(buf))
+        _send(hwnd, SCI_GETTEXT, n + 1, ctypes.addressof(buf))
         self.enc = "utf-8" if _send(hwnd, SCI_GETCODEPAGE) == 65001 else "mbcs"
         self.eol = {0: "\r\n", 1: "\r", 2: "\n"}[_send(hwnd, SCI_GETEOLMODE)]
         text = buf.raw[:n].decode(self.enc, "replace")
@@ -326,6 +397,8 @@ def _make_proc(hwnd, old):
                     if run_key(h, action):
                         _state["swallow_char"] = action in ("indent", "outdent", "enter")
                         return 0
+                except EngineDown as e:
+                    _warn_once(str(e))
                 except Exception:
                     log("key failed, passed to Notepad++:\n" + traceback.format_exc())
         if msg == WM_SETFOCUS:
@@ -371,6 +444,8 @@ def _make_main_proc(old):
                     action = "moveUp" if (wp & 0xFFFF) == IDM_EDIT_FUNCCALLTIP_PREVIOUS else "moveDown"
                     if run_key(view, action):
                         return 0
+            except EngineDown as e:
+                _warn_once(str(e))
             except Exception:
                 log("Alt+Up/Down failed, passed to Notepad++:\n" + traceback.format_exc())
         return user32.CallWindowProcW(old, h, msg, wp, lp)
@@ -411,7 +486,7 @@ def _warm():
     try:
         log("engine ready, core " + ask({"op": "ping"}).get("core", "?"))
     except Exception as e:
-        log("engine did not start: %s" % e)
+        log("engine did not start: %s" % e)  # EngineDown or anything else
 
 
 # ---------------------------------------------------------- menu commands ---

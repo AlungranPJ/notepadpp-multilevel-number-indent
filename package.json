@@ -1,12 +1,12 @@
 {
   "name": "npp-multilevel-number-indent",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Word-style multilevel numbering for Notepad++, sharing the numbering engine of the Multilevel Number Indent plugin.",
   "license": "MIT",
   "scripts": {
     "sync-core": "node scripts/sync-core.js",
-    "test": "node test/server.test.js",
+    "test": "node test/server.test.js && python test/pyside.test.py",
     "build": "node scripts/build.js"
   }
 }

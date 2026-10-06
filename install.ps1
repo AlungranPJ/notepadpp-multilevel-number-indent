@@ -24,6 +24,13 @@ $ContextItems = @('Reset numbering', 'Add numbering', 'Remove numbering', 'Clear
 $MenuItems = $ContextItems + @('Numbering keys on or off')
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 
+$script:TempDirs = @()
+function NewTemp($prefix) {
+    $d = Join-Path $env:TEMP ($prefix + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory $d | Out-Null
+    $script:TempDirs += $d
+    return $d
+}
 function Say($m) { Write-Host "  $m" }
 function Step($m) { Write-Host ''; Write-Host "> $m" -ForegroundColor Magenta }
 function Fail($m) { throw [System.Exception]::new($m) }
@@ -39,13 +46,15 @@ function WriteText($p, $t) { [IO.File]::WriteAllText($p, $t, $Utf8) }
 function Backup($p) { if ((Test-Path $p) -and -not (Test-Path "$p.mni-backup")) { Copy-Item $p "$p.mni-backup" } }
 
 function Find-Npp {
-    foreach ($k in 'HKLM:\SOFTWARE\Notepad++', 'HKLM:\SOFTWARE\WOW6432Node\Notepad++') {
+    foreach ($k in 'HKLM:\SOFTWARE\Notepad++', 'HKLM:\SOFTWARE\WOW6432Node\Notepad++', 'HKCU:\SOFTWARE\Notepad++') {
         $v = (Get-ItemProperty $k -ErrorAction SilentlyContinue).'(default)'
         if ($v -and (Test-Path (Join-Path $v 'notepad++.exe'))) { return $v }
     }
     foreach ($d in "$env:ProgramFiles\Notepad++", "${env:ProgramFiles(x86)}\Notepad++") {
         if (Test-Path (Join-Path $d 'notepad++.exe')) { return $d }
     }
+    $running = Get-Process notepad++ -ErrorAction SilentlyContinue | Select-Object -First 1
+    try { if ($running -and $running.Path) { return (Split-Path $running.Path) } } catch { }
     return $null
 }
 
@@ -116,8 +125,7 @@ function Get-Package {
     $here = $PSScriptRoot
     if ($here -and (Test-Path (Join-Path $here 'server\mni-server.js'))) { return $here }
     Step 'Downloading Multilevel Number Indent'
-    $tmp = Join-Path $env:TEMP ('mni-npp-' + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory $tmp | Out-Null
+    $tmp = NewTemp 'mni-npp-'
     $zip = Join-Path $tmp 'package.zip'
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -UseBasicParsing "https://github.com/$Repo/releases/latest/download/npp-multilevel-number-indent.zip" -OutFile $zip
@@ -139,8 +147,7 @@ function Install-PythonScript($npp) {
     $suffix = @{ x64 = '_x64'; x86 = ''; arm64 = '_arm64' }[$arch]
     $name = "PythonScript_Full_${PythonScriptVersion}${suffix}_PluginAdmin.zip"
     Say "downloading $name ($arch Notepad++)"
-    $tmp = Join-Path $env:TEMP ('mni-ps-' + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory $tmp | Out-Null
+    $tmp = NewTemp 'mni-ps-'
     $zip = Join-Path $tmp $name
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -UseBasicParsing "https://github.com/bruderstein/PythonScript/releases/download/$PythonScriptTag/$name" -OutFile $zip
@@ -163,13 +170,20 @@ function Install-Files($src, $userDir, $node) {
     Get-ChildItem (Join-Path $src 'pythonscript\commands') -Filter *.py | Copy-Item -Destination $scripts -Force
 
     $settingsPath = Join-Path $mni 'settings.json'
+    $existing = $null
     if (Test-Path $settingsPath) {
-        $s = ReadText $settingsPath | ConvertFrom-Json
-        if (-not $s.node -or -not (Test-Path $s.node) -or ($s.node -match '\\hermes\\' -and $node -notmatch '\\hermes\\')) {
-            $s | Add-Member -Force -NotePropertyName node -NotePropertyValue $node
-            WriteText $settingsPath ($s | ConvertTo-Json)
+        try { $existing = ReadText $settingsPath | ConvertFrom-Json -ErrorAction Stop } catch {
+            Say 'settings.json could not be read; saving it as settings.json.damaged and writing a fresh one'
+            Copy-Item -Force $settingsPath "$settingsPath.damaged"
+        }
+    }
+    if ($existing -and $existing -is [pscustomobject]) {
+        if (-not $existing.node -or -not (Test-Path $existing.node) -or ($existing.node -match '\\hermes\\' -and $node -notmatch '\\hermes\\')) {
+            $existing | Add-Member -Force -NotePropertyName node -NotePropertyValue $node
+            WriteText $settingsPath ($existing | ConvertTo-Json)
         }
         Say 'kept your settings.json'
+        if ($existing.enabled -eq $false) { Say 'note: "enabled" is false in settings.json, so the number keys are off (Plugins > Python Script > Scripts > Numbering keys on or off)' }
     } else {
         $s = [ordered]@{ enabled = $true; node = $node; formats = @('1.', '1.1.', '1.1.1.', '1)', '1.1)', '1.1.1)') }
         WriteText $settingsPath ($s | ConvertTo-Json)
@@ -265,4 +279,6 @@ function Main {
     Say "Log:      $(Join-Path $mni 'mni.log')"
 }
 
-try { Main } catch { Write-Host ''; Write-Host "  $($_.Exception.Message)" -ForegroundColor Red }
+try { Main } catch { Write-Host ''; Write-Host "  $($_.Exception.Message)" -ForegroundColor Red } finally {
+    foreach ($d in $script:TempDirs) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $d }
+}
