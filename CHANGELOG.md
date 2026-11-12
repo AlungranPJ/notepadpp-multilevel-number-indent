@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 (2026-11-12)
+
+Enter now starts a body line under the item, the way the Obsidian plugin's editor looks.
+
+- Enter at the end of an item (`1.3. Netron: ...`) makes a line with no number, indented to the item's text column, so a description sits under its item instead of becoming the next numbering level. Enter on that body line keeps the column; Enter on an empty body line carries on with the next number; Enter on the empty number leaves the list.
+- `"enterStartsBody": false` in `settings.json` gives you the old Enter, where every press makes the next number.
+- Wrapped lines now follow their own indentation (`"wrapIndent": "indent"`), so a long item or a long body line no longer falls back to the left margin; `"deep"` goes one level further, `false` leaves Notepad++ alone, and a number (e.g. `5`) is the exact number of columns to add, which lines wrapped text up with `1.1.`-style numbers.
+- Lines inside a fenced code block, an empty item and a caret in the middle of an item keep the old behaviour.
+- Tests: 32 engine tests plus 28 for the Python side.
+
 ## 0.1.2 (2026-10-06)
 
 Found by trying to break it.

@@ -100,6 +100,78 @@ function wholeLines(req, out) {
 	return change ? { handled: true, change, sel: null } : { handled: false };
 }
 
+/** Columns in a run of spaces and tabs, the way the core counts an indent. */
+function columns(s) {
+	let n = 0;
+	for (const c of s) n += c === "	" ? 4 : 1;
+	return n;
+}
+
+/**
+ * Enter with body lines: the Notepad++ port has no hanging indent of its own,
+ * so Enter at the end of an item starts a line indented to the item's text
+ * column (indent + the width of the number) instead of the next number. Body
+ * text keeps its own column on Enter. Everything else - an empty item, a caret
+ * in the middle, a fence - keeps the old Enter.
+ */
+function enterBody(req) {
+	const lines = req.lines;
+	const line = req.line;
+	const raw = lines[line] || "";
+	const mask = core.fenceMask(lines);
+	const plainEnter = () => runAction(Object.assign({}, req, { action: "enter" }));
+	if (mask[line]) return plainEnter();
+	const lead = /^[ 	]*/.exec(raw)[0];
+	const leadColumns = columns(lead);
+	/* The nearest numbered line above, when it is shallower than this one. */
+	let parent = -1;
+	if (leadColumns > 0) {
+		for (let i = line - 1; i >= 0; i--) {
+			if (mask[i]) break;
+			const above = lines[i] || "";
+			if (above.trim() === "") continue;
+			const q = core.parseLine(above);
+			if (q) {
+				if (columns(q.indent) < leadColumns) parent = i;
+				break;
+			}
+			if (columns(/^[ 	]*/.exec(above)[0]) < leadColumns) break;
+		}
+	}
+	const p = core.parseLine(raw);
+	if (p) {
+		if (p.content.trim() === "" || req.ch < raw.length) return plainEnter();
+		const body = p.indent + " ".repeat(p.number.length + 1);
+		const out = lines.slice();
+		out.splice(line + 1, 0, body);
+		return {
+			handled: true,
+			change: lineChange(lines, out),
+			sel: { aLine: line + 1, aCh: body.length, bLine: line + 1, bCh: body.length },
+		};
+	}
+	if (parent < 0) return { handled: false };
+	if (raw.trim() !== "") {
+		/* More body text for the same item: keep its column. */
+		if (req.ch < raw.length) return { handled: false };
+		const out = lines.slice();
+		out.splice(line + 1, 0, lead);
+		return {
+			handled: true,
+			change: lineChange(lines, out),
+			sel: { aLine: line + 1, aCh: lead.length, bLine: line + 1, bCh: lead.length },
+		};
+	}
+	/* An empty body line closes the item: carry on with the next sibling. */
+	const out = lines.slice();
+	out[line] = core.parseLine(lines[parent]).indent + "0. ";
+	core.renumberRange(out, line, line);
+	const change = lineChange(lines, out);
+	if (!change) return { handled: false };
+	const caret = out[line].length;
+	return { handled: true, change, sel: { aLine: line, aCh: caret, bLine: line, bCh: caret } };
+}
+
 const RANGE = {
 	renumber: (lines, from, to) => {
 		const out = lines.slice();
@@ -123,6 +195,8 @@ function handle(req) {
 			return { handled: true, core: fs.readFileSync(path.join(__dirname, "CORE_VERSION"), "utf8").trim() };
 		case "action":
 			return runAction(req);
+		case "enter":
+			return enterBody(req);
 		case "renumber":
 		case "insert":
 		case "remove":

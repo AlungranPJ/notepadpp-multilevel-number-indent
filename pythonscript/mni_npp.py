@@ -60,6 +60,7 @@ SCI_GETTEXT = 2182
 SCI_GETEOLMODE = 2030
 SCI_GETUSETABS = 2125
 SCI_GETINDENT = 2123
+SCI_SETINDENT = 2122
 SCI_GETTABWIDTH = 2121
 SCI_LINEFROMPOSITION = 2166
 SCI_POSITIONFROMLINE = 2167
@@ -75,6 +76,7 @@ SCI_GETSELECTIONS = 2570
 SCI_AUTOCACTIVE = 2102
 SCI_GETREADONLY = 2140
 SCI_GETSELECTIONMODE = 2423
+SCI_SETWRAPINDENTMODE = 2472
 
 NPPMSG = 0x0400 + 1000
 NPPM_GETCURRENTSCINTILLA = NPPMSG + 4
@@ -129,6 +131,20 @@ def settings():
         _warn_once("settings.json could not be read (%s); using the defaults" % e)
         data = {}
     data["enabled"] = bool(data.get("enabled", True))
+    # Enter at the end of an item starts its body line, indented under the
+    # item's text, instead of the next number. false = Word's plain Enter.
+    data["enterStartsBody"] = bool(data.get("enterStartsBody", True))
+    # Wrapped lines follow their own line's indent ("indent"), one level deeper
+    # ("deep"), stay where Notepad++ puts them (false), or a number = how many
+    # columns to add to the line's indent (5 lines up with `1.1.` numbers).
+    wrap = data.get("wrapIndent", "indent")
+    if isinstance(wrap, bool):
+        wrap = "indent" if wrap else False
+    elif isinstance(wrap, int):
+        wrap = wrap if 1 <= wrap <= 12 else "indent"
+    elif wrap not in ("indent", "deep"):
+        wrap = "indent"
+    data["wrapIndent"] = wrap
     formats = data.get("formats")
     if not (isinstance(formats, list) and formats and all(isinstance(x, str) for x in formats)):
         data["formats"] = list(DEFAULT_FORMATS)
@@ -346,6 +362,22 @@ def _usable(hwnd):
     return _wants_lists()
 
 
+def _apply_wrap_indent(hwnd):
+    """Wrapped display lines follow their line's own indentation, so a long item
+    or its body text no longer falls back to the left margin. Scintilla shifts
+    them by the document's indent size, so an exact column count means setting
+    that too. Notepad++ keeps both per view and forgets them when it closes,
+    which is why the key hook re-asserts them on every key in a list file."""
+    mode = settings()["wrapIndent"]
+    if mode is False:
+        return
+    if isinstance(mode, int):  # an exact number of columns from the line's indent
+        _send(hwnd, SCI_SETINDENT, mode)
+        _send(hwnd, SCI_SETWRAPINDENTMODE, 2)  # SC_WRAPINDENT_INDENT
+        return
+    _send(hwnd, SCI_SETWRAPINDENTMODE, 2 if mode == "indent" else 3)  # INDENT / DEEPINDENT
+
+
 def run_key(hwnd, action):
     """True when the engine took the key; False hands it back to Notepad++."""
     if not _usable(hwnd):
@@ -354,12 +386,15 @@ def run_key(hwnd, action):
     if doc.too_big:
         return False
     first, last, had_sel, (line, ch) = doc.selection_lines()
-    req = doc.base_request("action")
+    # "enter" is the body-line Enter; settings.json can ask for the plain one.
+    op = "enter" if action == "enter" and settings()["enterStartsBody"] else "action"
+    req = doc.base_request(op)
     req.update({"action": action, "line": line, "ch": ch, "from": first, "to": last, "hadSelection": had_sel})
     reply = ask(req)
     if not reply.get("handled"):
         return False
     doc.apply(reply)
+    _apply_wrap_indent(hwnd)
     return True
 
 
@@ -390,6 +425,11 @@ def _make_proc(hwnd, old):
                 return 0
         if msg in (WM_KEYDOWN, WM_SYSKEYDOWN):
             action = _action_for(msg, wp)
+            try:
+                if _usable(h):
+                    _apply_wrap_indent(h)
+            except Exception:
+                log("wrap indent failed:\n" + traceback.format_exc())
             if os.environ.get("MNI_DEBUG") or os.path.exists(os.path.join(HOME, "debug")):
                 log("key msg=%x vk=%x alt=%s -> %s" % (msg, wp, _down(VK_MENU), action))
             if action:
@@ -471,6 +511,8 @@ def install(npp_hwnd):
         _state["views"][child] = old
         _state["order"].append(child)
         user32.SetWindowLongPtrW(child, GWLP_WNDPROC, ctypes.cast(cb, ctypes.c_void_p))
+    for child in views:
+        _apply_wrap_indent(child)
     if "main_old" not in _state:
         old_main = user32.GetWindowLongPtrW(npp_hwnd, GWLP_WNDPROC)
         cb = _make_main_proc(old_main)

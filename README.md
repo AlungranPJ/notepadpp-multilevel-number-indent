@@ -1,6 +1,6 @@
 # Multilevel Number Indent for Notepad++
 
-[![tests](https://img.shields.io/badge/tests-33%20passed-a6d189)](test/server.test.js)
+[![tests](https://img.shields.io/badge/tests-60%20passed-a6d189)](test/server.test.js)
 [![core](https://img.shields.io/badge/core-3.3.12-ca9ee6)](https://github.com/AlungranPJ/obsidian-multilevel-number-indent)
 [![release](https://img.shields.io/github/v/release/AlungranPJ/notepadpp-multilevel-number-indent?color=8caaee)](https://github.com/AlungranPJ/notepadpp-multilevel-number-indent/releases/latest)
 
@@ -53,13 +53,19 @@ To remove it, double-click `uninstall.cmd`. PythonScript stays, in case your oth
 
 | Key | On a numbered line |
 |---|---|
-| <kbd>Enter</kbd> | next number at the same level, caret right after it |
+| <kbd>Enter</kbd> | starts the item's body line, indented to where its text starts. Enter again on the empty body line makes the next number |
 | <kbd>Tab</kbd> | one level in (`2.` → `1.1.`), numbers below fixed |
 | <kbd>Shift</kbd>+<kbd>Tab</kbd> | one level out |
 | <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | swap with the item above or below, children come along |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd> | undo the whole move in one go |
 
 Select a few items first and Tab, Shift+Tab and Alt+↑/↓ move the whole group. The group stays selected, so you can keep pressing.
+
+**Body lines.** Press Enter at the end of an item like `1.3. Netron: open the model` and the new line has no number: it is indented to where `Netron` starts, so the description of that item sits under it like a paragraph. Enter on that body line starts another one at the same column, and Enter on an empty body line goes on with the next number (`1.4.`). To leave the list, press Enter once more on the empty number.
+
+Want the old Word behaviour, where every Enter makes the next number? Set `"enterStartsBody": false` in `settings.json` and restart Notepad++.
+
+**Long lines.** A line that is too wide wraps under its own indentation instead of jumping back to the left margin (`"wrapIndent": "indent"`). A body line already sits at the item's text column, so its wrapped text lines up under the text. `"wrapIndent": "deep"` indents wrapped lines one level more; `false` leaves Notepad++'s own setting alone. A **number** is the exact count of columns added to the line's indent — with `1.1.`-style numbers, `5` puts wrapped text right under the item's text (`2`, `3`, `4` and so on work too).
 
 It only steps in on numbered lines in `.txt`, `.md` and untitled files. In code files, on lines without a number, with column selection or several carets, or while autocomplete is open, every key does exactly what Notepad++ always did.
 
@@ -89,12 +95,14 @@ The same list, plus **Numbering keys on or off**, is under Plugins → Python Sc
 ```json
 {
   "enabled": true,
+  "enterStartsBody": true,
+  "wrapIndent": "indent",
   "node": "C:\\Program Files\\nodejs\\node.exe",
   "formats": ["1.", "1.1.", "1.1.1.", "1)", "1.1)", "1.1.1)"]
 }
 ```
 
-`formats` is one entry per level, the same format list as the Obsidian plugin's setting. Restart Notepad++ after editing it.
+`formats` is one entry per level, the same format list as the Obsidian plugin's setting. `enterStartsBody` is the body-line Enter described under Keys; `false` gives you a next number on every Enter. `wrapIndent` is `"indent"`, `"deep"`, `false` for Notepad++'s own setting, or a number of columns (5 lines up with `1.1.` numbers). Restart Notepad++ after editing it.
 
 ## When something is off
 

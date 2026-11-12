@@ -36,6 +36,13 @@ function type(state, text) {
 	lines[state.line] = l.slice(0, state.ch) + text + l.slice(state.ch);
 	return { lines, line: state.line, ch: state.ch + text.length };
 }
+/* Enter with body lines: the Notepad++ shell asks for this op. */
+function bodyEnter(state) {
+	const r = handle(Object.assign({ op: "enter", lines: state.lines, line: state.line, ch: state.ch, from: state.line, to: state.line, action: "enter", hadSelection: false }, TAB));
+	if (!r.handled) return Object.assign({}, state, { unhandled: true });
+	const lines = apply(state.lines, r);
+	return { lines, line: r.sel ? r.sel.bLine : state.line, ch: r.sel ? r.sel.bCh : state.ch };
+}
 
 console.log("Tab, Enter and Shift+Tab number like the Obsidian plugin");
 {
@@ -70,6 +77,34 @@ console.log("Tab, Enter and Shift+Tab number like the Obsidian plugin");
 	check("and carries on 2)", s.lines[8], "\t\t\t2) e");
 	const plain = key({ lines: ["just text"], line: 0, ch: 9 }, "indent");
 	check("Tab on a line with no number is left to the editor", plain.unhandled, true);
+}
+
+console.log("Enter starts a body line under the item");
+{
+	/* The item's text column: one tab (4) plus "1.3. " (5). */
+	let s = { lines: ["1. heading", "\t1.1. a", "\t1.2. b", "\t1.3. Netron: a tool", "end"], line: 3, ch: 23 };
+	s = bodyEnter(s);
+	check("the new line has no number and sits under the item's text", s.lines.slice(3, 5), ["\t1.3. Netron: a tool", "\t     "]);
+	check("the caret waits after the number", [s.line, s.ch], [4, 6]);
+	s = type(s, "body of 1.3");
+	check("the body text stays inside the item", s.lines[4], "	     body of 1.3");
+	s = bodyEnter({ lines: s.lines, line: 4, ch: s.lines[4].length });
+	check("Enter after body text starts another body line at the same column", [s.lines[5], s.line, s.ch], ["	     ", 5, 6]);
+	const next = bodyEnter({ lines: ["1. heading", "	1.1. Netron", "	     ", "	1.2. end"], line: 2, ch: 6 });
+	check("Enter on an empty body line makes the next number", next.lines.slice(2), ["	1.2. ", "	1.3. end"]);
+	check("and the caret sits after that number", [next.line, next.ch], [2, 6]);
+	const mid = bodyEnter({ lines: ["1. aaa bbb"], line: 0, ch: 5 });
+	check("Enter in the middle of an item still splits it", mid.lines, ["1. aa", "2. a bbb"]);
+	const empty = bodyEnter({ lines: ["1. a", "2. "], line: 1, ch: 3 });
+	check("Enter on an empty item still ends it", empty.lines, ["1. a", ""]);
+	const fence = bodyEnter({ lines: ["```", "1. code", "```"], line: 1, ch: 8 });
+	check("a numbered line inside a fence is left alone", fence.unhandled, true);
+	const plain = bodyEnter({ lines: ["just text"], line: 0, ch: 9 });
+	check("a line with no number is left to the editor", plain.unhandled, true);
+	const blank = bodyEnter({ lines: ["1. a", ""], line: 1, ch: 0 });
+	check("a blank line at the item's own level is left to the editor", blank.unhandled, true);
+	const off = handle(Object.assign({ op: "action", lines: ["1. a"], line: 0, ch: 4, from: 0, to: 0, action: "enter", hadSelection: false }, TAB));
+	check("the plain action still numbers like before", apply(["1. a"], off), ["1. a", "2. "]);
 }
 
 console.log("a selected group moves as one and stays selected");

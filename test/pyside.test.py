@@ -85,6 +85,74 @@ with open(os.path.join(home, "mni-server.js"), "w", encoding="utf-8") as f:
 mni_npp._state["paused_until"] = 0
 check("the engine comes back once it is fixed", mni_npp.ask({"op": "ping"}).get("handled"), True)
 
+print("\nEnter asks for a body line")
+
+
+class FakeDoc(object):
+    too_big = False
+
+    def __init__(self, hwnd):
+        pass
+
+    def selection_lines(self):
+        return 0, 0, False, (0, 4)
+
+    def base_request(self, op):
+        return {"op": op, "lines": ["1. a"], "indent": "\t", "formats": []}
+
+    def apply(self, reply):
+        pass
+
+
+asked = []
+real_doc, real_ask, real_usable = mni_npp.Doc, mni_npp.ask, mni_npp._usable
+mni_npp.Doc = FakeDoc
+mni_npp._usable = lambda hwnd: True
+mni_npp.ask = lambda req: (asked.append(req), {"handled": True, "change": None, "sel": None})[1]
+put(b'{"enabled": true}')
+check("body lines are on unless settings.json says no", mni_npp.settings()["enterStartsBody"], True)
+mni_npp.run_key(1, "enter")
+check("Enter asks the engine for a body line", (asked[-1]["op"], asked[-1]["action"]), ("enter", "enter"))
+mni_npp.run_key(1, "indent")
+check("Tab still uses the plain action op", asked[-1]["op"], "action")
+put(b'{"enterStartsBody": false}')
+mni_npp.run_key(1, "enter")
+check("enterStartsBody false goes back to Word's Enter", asked[-1]["op"], "action")
+mni_npp.Doc, mni_npp.ask, mni_npp._usable = real_doc, real_ask, real_usable
+
+print("\nthe wrap indent")
+put(b'{"enabled": true}')
+check("wrapped lines keep the line's own indent by default", mni_npp.settings()["wrapIndent"], "indent")
+put(b'{"wrapIndent": "deep"}')
+check("deep is kept", mni_npp.settings()["wrapIndent"], "deep")
+put(b'{"wrapIndent": false}')
+check("off is kept", mni_npp.settings()["wrapIndent"], False)
+put(b'{"wrapIndent": "nonsense"}')
+check("an unknown value falls back to indent", mni_npp.settings()["wrapIndent"], "indent")
+put(b'{"wrapIndent": true}')
+check("true means indent", mni_npp.settings()["wrapIndent"], "indent")
+put(b'{"wrapIndent": 5}')
+check("a number is kept as the column count", mni_npp.settings()["wrapIndent"], 5)
+put(b'{"wrapIndent": 99}')
+check("an out-of-range number falls back to indent", mni_npp.settings()["wrapIndent"], "indent")
+
+sent = []
+real_send = mni_npp._send
+mni_npp._send = lambda h, m, w=0, l=0: sent.append((m, w))
+for raw, want in [(b'{"wrapIndent": "indent"}', 2), (b'{"wrapIndent": "deep"}', 3)]:
+    put(raw)
+    mni_npp._apply_wrap_indent(1)
+    check(raw.decode() + " -> Scintilla mode", sent[-1], (mni_npp.SCI_SETWRAPINDENTMODE, want))
+put(b'{"wrapIndent": 5}')
+sent.clear()
+mni_npp._apply_wrap_indent(1)
+check("a column count also sets the document indent", sent, [(mni_npp.SCI_SETINDENT, 5), (mni_npp.SCI_SETWRAPINDENTMODE, 2)])
+put(b'{"wrapIndent": false}')
+before = len(sent)
+mni_npp._apply_wrap_indent(1)
+check("off sends nothing to Scintilla", len(sent), before)
+mni_npp._send = real_send
+
 print("\nbig files")
 
 

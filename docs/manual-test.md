@@ -5,15 +5,23 @@ Run after `python install.py` with a scratch `.txt` file, never a real note.
 
 | Step | Expect |
 |---|---|
-| End of `2) b` under `1.1.1. use`, Enter, type `c` | `3) c` |
+| End of `2) b` under `1.1.1. use`, Enter | a new line with no number, indented under `b` |
+| type `note`, Enter | another body line at the same column |
+| Enter (on the empty body line) | `3) ` at the item's level, caret after the number |
+| type `c` | `3) c` |
 | Enter, Shift+Tab, type `problem` | `1.1.2. problem` |
 | Enter, Tab, type `d` | `1) d` (new sub-list) |
-| Enter, type `e` | `2) e` |
+| Enter on the empty body line, type `e` | `2) e` |
 | On `2) e`, Alt+↑ | `1) e` / `2) d` |
 | Ctrl+Z | back to `1) d` / `2) e` |
 | `3) d` / `4) e` written by hand, Python Script → Scripts → Reset numbering | `1) d` / `2) e` |
+| `1.3. Netron: open it`, Enter | no number, caret at the column where `Netron` starts (9 with a 4-wide tab) |
+| a long `1.5. ...` line with `"wrapIndent": 5` | the wrapped row starts at column 9, under the item's text (column 8 with `"indent"`) |
+| `"enterStartsBody": false`, restart, Enter on `1. a` | `2. ` (the old Enter) |
 | Right-click | last entry "Multilevel list section" with 10 commands |
 | Same keys in a `.py` file | Notepad++'s own behaviour |
 
-Verified 2026-10-01 on Notepad++ 8.9.8.1, PythonScript 3.0.27, Node 24, core 3.3.12.
+Check the body-line case by hand once: type a description and keep pressing Enter. The text must stay in one column, and the list must not gain numbers until the body line is empty.
+
+Verified 2026-11-12 on Notepad++ 8.9.8.1, PythonScript 3.0.27, Node 24, core 3.3.12.
 Afterwards remove the scratch files and their entries from `%APPDATA%\Notepad++\session.xml`.

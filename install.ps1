@@ -185,7 +185,7 @@ function Install-Files($src, $userDir, $node) {
         Say 'kept your settings.json'
         if ($existing.enabled -eq $false) { Say 'note: "enabled" is false in settings.json, so the number keys are off (Plugins > Python Script > Scripts > Numbering keys on or off)' }
     } else {
-        $s = [ordered]@{ enabled = $true; node = $node; formats = @('1.', '1.1.', '1.1.1.', '1)', '1.1)', '1.1.1)') }
+        $s = [ordered]@{ enabled = $true; enterStartsBody = $true; wrapIndent = 'indent'; node = $node; formats = @('1.', '1.1.', '1.1.1.', '1)', '1.1)', '1.1.1)') }
         WriteText $settingsPath ($s | ConvertTo-Json)
     }
 
