@@ -17,7 +17,9 @@ Run after `python install.py` with a scratch `.txt` file, never a real note.
 | Ctrl+Z | back to `1) d` / `2) e` |
 | `3) d` / `4) e` written by hand, Python Script → Scripts → Reset numbering | `1) d` / `2) e` |
 | `1.3. Netron: open it`, Enter | no number, caret at the column where `Netron` starts (9 with a 4-wide tab) |
-| a long `1.5. ...` line with `"wrapIndent": 5` | the wrapped row starts at column 9, under the item's text (column 8 with `"indent"`) |
+| a long `1. d` line, wrapped | the continuation starts at column 3, under `d` |
+| a long `2.2. ...` line, wrapped | the continuation starts at column 9, under the text |
+| a long body line (Shift+Enter), wrapped | the continuation starts at the body column |
 | `"enterStartsBody": false`, restart, Enter on `1. a` | `2. ` (the old Enter) |
 | Right-click | last entry "Multilevel list section" with 10 commands |
 | Same keys in a `.py` file | Notepad++'s own behaviour |

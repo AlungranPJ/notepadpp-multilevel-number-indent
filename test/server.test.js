@@ -105,7 +105,7 @@ console.log("Enter numbers, Shift+Enter starts a body line");
 	check("Enter on an empty body line makes the next number", close.lines.slice(2), ["	1.2. ", "	1.3. end"]);
 	check("and the caret sits after that number", [close.line, close.ch], [2, 6]);
 	const emptyItem = bodyEnter({ lines: ["1. a", "2. "], line: 1, ch: 3 });
-	check("Shift+Enter on an empty item is left to the editor", emptyItem.unhandled, true);
+	check("Shift+Enter on an empty item still opens its body line", emptyItem.lines, ["1. a", "2. ", "   "]);
 	const fence = plainEnter({ lines: ["```", "1. code", "```"], line: 1, ch: 8 });
 	check("a numbered line inside a fence is left alone", fence.unhandled, true);
 	const plain = bodyEnter({ lines: ["just text"], line: 0, ch: 9 });

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 (2026-11-16)
+
+The wrap indent is measured from the number on the line being edited.
+
+- `wrapIndent` is `"auto"` by default: a long `1.` line continues at column 3, a `2.2.` line at column 9, a `1.1.1.` line at column 11, and a body line continues under itself. One fixed column count could never fit all of those, which is why the old value looked wrong one level down.
+- Shift+Enter on an item that has no text yet still opens its body line (it used to fall through to a plain newline at the item's indent).
+- Tests: 34 engine tests plus 42 for the Python side.
+
 ## 0.2.1 (2026-11-12)
 
 Shift+Enter, not Enter, starts the body line, and wrapped text lines up with the number.

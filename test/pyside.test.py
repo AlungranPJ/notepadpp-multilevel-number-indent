@@ -127,34 +127,48 @@ mni_npp.Doc, mni_npp.ask, mni_npp._usable = real_doc, real_ask, real_usable
 
 print("\nthe wrap indent")
 put(b'{"enabled": true}')
-check("wrapped lines keep the line's own indent by default", mni_npp.settings()["wrapIndent"], 5)
+check("auto by default", mni_npp.settings()["wrapIndent"], "auto")
 put(b'{"wrapIndent": "deep"}')
 check("deep is kept", mni_npp.settings()["wrapIndent"], "deep")
 put(b'{"wrapIndent": false}')
 check("off is kept", mni_npp.settings()["wrapIndent"], False)
 put(b'{"wrapIndent": "nonsense"}')
-check("an unknown value falls back to indent", mni_npp.settings()["wrapIndent"], "indent")
+check("an unknown value falls back to auto", mni_npp.settings()["wrapIndent"], "auto")
 put(b'{"wrapIndent": true}')
 check("true means indent", mni_npp.settings()["wrapIndent"], "indent")
 put(b'{"wrapIndent": 5}')
 check("a number is kept as the column count", mni_npp.settings()["wrapIndent"], 5)
 put(b'{"wrapIndent": 99}')
-check("an out-of-range number falls back to indent", mni_npp.settings()["wrapIndent"], "indent")
+check("an out-of-range number falls back to auto", mni_npp.settings()["wrapIndent"], "auto")
+
+for raw, want in [
+    ("1. d", 3),
+    ("\t2.1. sd", 5),
+    ("\t2.2. ", 5),
+    ("\t\t1.1.1. x", 7),
+    ("1) d", 3),
+    ("\t     body text", 0),
+    ("plain text", 0),
+]:
+    check("wrap width of %r" % raw, mni_npp._wrap_width(raw), want)
 
 sent = []
 real_send = mni_npp._send
 mni_npp._send = lambda h, m, w=0, l=0: sent.append((m, w))
 for raw, want in [(b'{"wrapIndent": "indent"}', 2), (b'{"wrapIndent": "deep"}', 3)]:
     put(raw)
-    mni_npp._apply_wrap_indent(1)
+    mni_npp._apply_wrap_indent(1, "1.3. x")
     check(raw.decode() + " -> Scintilla mode", sent[-1], (mni_npp.SCI_SETWRAPINDENTMODE, want))
-put(b'{"wrapIndent": 5}')
+put(b'{"wrapIndent": "auto"}')
 sent.clear()
-mni_npp._apply_wrap_indent(1)
-check("a column count also sets the document indent", sent, [(mni_npp.SCI_SETINDENT, 5), (mni_npp.SCI_SETWRAPINDENTMODE, 2)])
+mni_npp._apply_wrap_indent(1, "\t1.3. x")
+check("auto sets the document indent from the number", sent, [(mni_npp.SCI_SETINDENT, 5), (mni_npp.SCI_SETWRAPINDENTMODE, 2)])
+sent.clear()
+mni_npp._apply_wrap_indent(1, "\t     body text")
+check("auto adds nothing on a body line", sent, [(mni_npp.SCI_SETINDENT, 0), (mni_npp.SCI_SETWRAPINDENTMODE, 2)])
 put(b'{"wrapIndent": false}')
 before = len(sent)
-mni_npp._apply_wrap_indent(1)
+mni_npp._apply_wrap_indent(1, "1.3. x")
 check("off sends nothing to Scintilla", len(sent), before)
 mni_npp._send = real_send
 

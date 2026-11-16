@@ -15,6 +15,7 @@ import ctypes
 import json
 import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -77,6 +78,8 @@ SCI_AUTOCACTIVE = 2102
 SCI_GETREADONLY = 2140
 SCI_GETSELECTIONMODE = 2423
 SCI_SETWRAPINDENTMODE = 2472
+SCI_GETLINE = 2153
+SCI_LINELENGTH = 2350
 
 NPPMSG = 0x0400 + 1000
 NPPM_GETCURRENTSCINTILLA = NPPMSG + 4
@@ -104,6 +107,8 @@ def log(msg):
 
 
 DEFAULT_FORMATS = ["1.", "1.1.", "1.1.1.", "1)", "1.1)", "1.1.1)"]
+# The shape of a number at the front of a line, for the wrap indent only.
+NUMBER_RE = re.compile(r"[ \t]*((?:\d+(?:\.\d+)*|[\u0e50-\u0e59]+(?:\.\d+)*|[ivxlcdm]+|[a-z])[.)]?)[ \t]+")
 _warned = set()
 
 
@@ -134,17 +139,17 @@ def settings():
     # Enter at the end of an item starts its body line, indented under the
     # item's text, instead of the next number. false = Word's plain Enter.
     data["enterStartsBody"] = bool(data.get("enterStartsBody", True))
-    # Wrapped lines follow their own line's indent ("indent" = the tab width),
-    # one level deeper ("deep"), stay where Notepad++ puts them (false), or a
-    # number = how many columns to add to the line's indent. 5 lines up with
-    # `1.1.` numbers, which is what the default formats produce.
-    wrap = data.get("wrapIndent", 5)
+    # Wrapped lines follow their own line's indent plus the width of its number:
+    # "auto" (default) measures the number on the line being edited, a number is
+    # that width in columns, "indent" is the tab width, "deep" one level more,
+    # and false leaves Notepad++ alone.
+    wrap = data.get("wrapIndent", "auto")
     if isinstance(wrap, bool):
         wrap = "indent" if wrap else False
     elif isinstance(wrap, int):
-        wrap = wrap if 1 <= wrap <= 12 else "indent"
-    elif wrap not in ("indent", "deep"):
-        wrap = "indent"
+        wrap = wrap if 1 <= wrap <= 12 else "auto"
+    elif wrap not in ("indent", "deep", "auto"):
+        wrap = "auto"
     data["wrapIndent"] = wrap
     formats = data.get("formats")
     if not (isinstance(formats, list) and formats and all(isinstance(x, str) for x in formats)):
@@ -363,20 +368,43 @@ def _usable(hwnd):
     return _wants_lists()
 
 
-def _apply_wrap_indent(hwnd):
-    """Wrapped display lines follow their line's own indentation, so a long item
-    or its body text no longer falls back to the left margin. Scintilla shifts
-    them by the document's indent size, so an exact column count means setting
-    that too. Notepad++ keeps both per view and forgets them when it closes,
-    which is why the key hook re-asserts them on every key in a list file."""
+def _wrap_width(raw):
+    """How many columns to add so a wrapped line starts where the text starts:
+    the width of the number plus the space after it. 0 for a line that carries no
+    number, because a body line's indent already is the text column."""
+    m = NUMBER_RE.match(raw or "")
+    return len(m.group(1)) + 1 if m else 0
+
+
+def _current_line(hwnd):
+    """The text of the line the caret is on (only its ASCII prefix is used)."""
+    pos = _send(hwnd, SCI_GETCURRENTPOS)
+    line = _send(hwnd, SCI_LINEFROMPOSITION, pos)
+    n = _send(hwnd, SCI_LINELENGTH, line)
+    if n <= 0:
+        return ""
+    buf = ctypes.create_string_buffer(n + 1)
+    _send(hwnd, SCI_GETLINE, line, ctypes.addressof(buf))
+    return buf.raw[:n].decode("latin-1")
+
+
+def _apply_wrap_indent(hwnd, raw=None):
+    """Wrapped display lines follow their line's own indentation plus the width
+    of its number, so a long item continues right under its text and a body line
+    continues under itself. Scintilla takes that width from the document's indent
+    size, which Notepad++ resets per document, so the key hook re-asserts it."""
     mode = settings()["wrapIndent"]
     if mode is False:
         return
-    if isinstance(mode, int):  # an exact number of columns from the line's indent
-        _send(hwnd, SCI_SETINDENT, mode)
+    if mode == "deep":
+        _send(hwnd, SCI_SETWRAPINDENTMODE, 3)  # SC_WRAPINDENT_DEEPINDENT
+        return
+    if mode == "indent":
         _send(hwnd, SCI_SETWRAPINDENTMODE, 2)  # SC_WRAPINDENT_INDENT
         return
-    _send(hwnd, SCI_SETWRAPINDENTMODE, 2 if mode == "indent" else 3)  # INDENT / DEEPINDENT
+    width = mode if isinstance(mode, int) else _wrap_width(raw if raw is not None else _current_line(hwnd))
+    _send(hwnd, SCI_SETINDENT, width)
+    _send(hwnd, SCI_SETWRAPINDENTMODE, 2)  # SC_WRAPINDENT_INDENT
 
 
 def run_key(hwnd, action):
@@ -441,7 +469,7 @@ def _make_proc(hwnd, old):
             action = _action_for(msg, wp)
             try:
                 if _usable(h):
-                    _apply_wrap_indent(h)
+                    _apply_wrap_indent(h, _current_line(h))
             except Exception:
                 log("wrap indent failed:\n" + traceback.format_exc())
             if os.environ.get("MNI_DEBUG") or os.path.exists(os.path.join(HOME, "debug")):

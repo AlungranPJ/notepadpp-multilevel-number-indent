@@ -1,6 +1,6 @@
 # Multilevel Number Indent for Notepad++
 
-[![tests](https://img.shields.io/badge/tests-68%20passed-a6d189)](test/server.test.js)
+[![tests](https://img.shields.io/badge/tests-76%20passed-a6d189)](test/server.test.js)
 [![core](https://img.shields.io/badge/core-3.3.12-ca9ee6)](https://github.com/AlungranPJ/obsidian-multilevel-number-indent)
 [![release](https://img.shields.io/github/v/release/AlungranPJ/notepadpp-multilevel-number-indent?color=8caaee)](https://github.com/AlungranPJ/notepadpp-multilevel-number-indent/releases/latest)
 
@@ -66,7 +66,7 @@ Select a few items first and Tab, Shift+Tab and Alt+↑/↓ move the whole group
 
 Want <kbd>Shift</kbd>+<kbd>Enter</kbd> left to Notepad++? Set `"enterStartsBody": false` in `settings.json` and restart Notepad++.
 
-**Long lines.** A line that is too wide wraps under its own indentation instead of jumping back to the left margin (`"wrapIndent": "indent"`). A body line already sits at the item's text column, so its wrapped text lines up under the text. `"wrapIndent": "deep"` indents wrapped lines one level more; `false` leaves Notepad++'s own setting alone. A **number** is the exact count of columns added to the line's indent — with `1.1.`-style numbers, `5` puts wrapped text right under the item's text (`2`, `3`, `4` and so on work too).
+**Long lines.** A line that is too wide wraps under its own text, not back at the left margin: the wrap indent is measured from the number on the line being edited (`"wrapIndent": "auto"`, the default), so `1.` continues at column 3 and `2.2.` at column 9 — and a body line continues under itself. Other values: a number is a fixed column count, `"indent"` uses the tab width, `"deep"` goes one level further, `false` leaves Notepad++'s own setting alone.
 
 It only steps in on numbered lines in `.txt`, `.md` and untitled files. In code files, on lines without a number, with column selection or several carets, or while autocomplete is open, every key does exactly what Notepad++ always did.
 
@@ -97,13 +97,13 @@ The same list, plus **Numbering keys on or off**, is under Plugins → Python Sc
 {
   "enabled": true,
   "enterStartsBody": true,
-  "wrapIndent": 5,
+  "wrapIndent": "auto",
   "node": "C:\\Program Files\\nodejs\\node.exe",
   "formats": ["1.", "1.1.", "1.1.1.", "1)", "1.1)", "1.1.1)"]
 }
 ```
 
-`formats` is one entry per level, the same format list as the Obsidian plugin's setting. `enterStartsBody` is the body-line Shift+Enter described under Keys; `false` leaves that key to Notepad++. `wrapIndent` is a number of columns (5 lines up with `1.1.` numbers), `"indent"` for the tab width, `"deep"` for one level more, or `false` for Notepad++'s own setting. Restart Notepad++ after editing it.
+`formats` is one entry per level, the same format list as the Obsidian plugin's setting. `enterStartsBody` is the body-line Shift+Enter described under Keys; `false` leaves that key to Notepad++. `wrapIndent` is `"auto"` (measure the number on the line being edited), a number of columns, `"indent"` (the tab width), `"deep"` (one level more), or `false` for Notepad++'s own setting. Restart Notepad++ after editing it.
 
 ## When something is off
 

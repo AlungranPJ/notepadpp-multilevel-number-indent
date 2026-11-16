@@ -128,7 +128,6 @@ function enterKey(req) {
 	const p = core.parseLine(raw);
 	if (p) {
 		if (!bodyMode) return plainEnter();
-		if (p.content.trim() === "") return { handled: false };
 		const prefixLength = raw.length - p.content.length;
 		if (req.ch < prefixLength) return { handled: false };
 		const offset = req.ch - prefixLength;
