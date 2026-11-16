@@ -134,10 +134,11 @@ def settings():
     # Enter at the end of an item starts its body line, indented under the
     # item's text, instead of the next number. false = Word's plain Enter.
     data["enterStartsBody"] = bool(data.get("enterStartsBody", True))
-    # Wrapped lines follow their own line's indent ("indent"), one level deeper
-    # ("deep"), stay where Notepad++ puts them (false), or a number = how many
-    # columns to add to the line's indent (5 lines up with `1.1.` numbers).
-    wrap = data.get("wrapIndent", "indent")
+    # Wrapped lines follow their own line's indent ("indent" = the tab width),
+    # one level deeper ("deep"), stay where Notepad++ puts them (false), or a
+    # number = how many columns to add to the line's indent. 5 lines up with
+    # `1.1.` numbers, which is what the default formats produce.
+    wrap = data.get("wrapIndent", 5)
     if isinstance(wrap, bool):
         wrap = "indent" if wrap else False
     elif isinstance(wrap, int):
@@ -386,10 +387,21 @@ def run_key(hwnd, action):
     if doc.too_big:
         return False
     first, last, had_sel, (line, ch) = doc.selection_lines()
-    # "enter" is the body-line Enter; settings.json can ask for the plain one.
-    op = "enter" if action == "enter" and settings()["enterStartsBody"] else "action"
+    if action == "body" and not settings()["enterStartsBody"]:
+        return False
+    # "enter" is the body-line aware op; settings.json can ask for the plain keys.
+    entering = action in ("enter", "body")
+    op = "enter" if entering and settings()["enterStartsBody"] else "action"
     req = doc.base_request(op)
-    req.update({"action": action, "line": line, "ch": ch, "from": first, "to": last, "hadSelection": had_sel})
+    req.update({
+        "action": "enter" if action == "body" else action,
+        "mode": "body" if action == "body" else "next",
+        "line": line,
+        "ch": ch,
+        "from": first,
+        "to": last,
+        "hadSelection": had_sel,
+    })
     reply = ask(req)
     if not reply.get("handled"):
         return False
@@ -407,8 +419,10 @@ def _action_for(msg, vk):
     if msg == WM_KEYDOWN and not ctrl and not alt:
         if vk == VK_TAB:
             return "outdent" if shift else "indent"
-        if vk == VK_RETURN and not shift:
-            return "enter"
+        if vk == VK_RETURN:
+            # Enter carries on with the numbering; Shift+Enter starts the item's
+            # body line, the way Word breaks a line inside a numbered paragraph.
+            return "body" if shift else "enter"
     if msg == WM_SYSKEYDOWN and alt and not ctrl and not shift:
         if vk == VK_UP:
             return "moveUp"
@@ -435,7 +449,7 @@ def _make_proc(hwnd, old):
             if action:
                 try:
                     if run_key(h, action):
-                        _state["swallow_char"] = action in ("indent", "outdent", "enter")
+                        _state["swallow_char"] = action in ("indent", "outdent", "enter", "body")
                         return 0
                 except EngineDown as e:
                     _warn_once(str(e))

@@ -108,61 +108,68 @@ function columns(s) {
 }
 
 /**
- * Enter with body lines: the Notepad++ port has no hanging indent of its own,
- * so Enter at the end of an item starts a line indented to the item's text
- * column (indent + the width of the number) instead of the next number. Body
- * text keeps its own column on Enter. Everything else - an empty item, a caret
- * in the middle, a fence - keeps the old Enter.
+ * Enter, two ways. `mode: "next"` is Enter: the engine's own next number.
+ * `mode: "body"` is Shift+Enter: the port has no hanging indent of its own, so
+ * this starts a body line under the item, indented to where the item's text
+ * starts (indent + the width of the number) and carrying the rest of the text
+ * when the caret sits mid-line. A body line splits the same way. On a blank
+ * body line Enter closes the item and carries on with its next sibling; inside
+ * a fence, on an empty item or on plain text nothing is handled.
  */
-function enterBody(req) {
+function enterKey(req) {
 	const lines = req.lines;
 	const line = req.line;
 	const raw = lines[line] || "";
 	const mask = core.fenceMask(lines);
+	if (mask[line]) return { handled: false };
+	const bodyMode = req.mode === "body";
 	const plainEnter = () => runAction(Object.assign({}, req, { action: "enter" }));
-	if (mask[line]) return plainEnter();
-	const lead = /^[ 	]*/.exec(raw)[0];
-	const leadColumns = columns(lead);
-	/* The nearest numbered line above, when it is shallower than this one. */
-	let parent = -1;
-	if (leadColumns > 0) {
-		for (let i = line - 1; i >= 0; i--) {
-			if (mask[i]) break;
-			const above = lines[i] || "";
-			if (above.trim() === "") continue;
-			const q = core.parseLine(above);
-			if (q) {
-				if (columns(q.indent) < leadColumns) parent = i;
-				break;
-			}
-			if (columns(/^[ 	]*/.exec(above)[0]) < leadColumns) break;
-		}
-	}
+
 	const p = core.parseLine(raw);
 	if (p) {
-		if (p.content.trim() === "" || req.ch < raw.length) return plainEnter();
-		const body = p.indent + " ".repeat(p.number.length + 1);
+		if (!bodyMode) return plainEnter();
+		if (p.content.trim() === "") return { handled: false };
+		const prefixLength = raw.length - p.content.length;
+		if (req.ch < prefixLength) return { handled: false };
+		const offset = req.ch - prefixLength;
+		const head = p.content.slice(0, offset);
+		const hang = p.indent + " ".repeat(p.number.length + 1);
+		const tail = p.content.slice(offset);
 		const out = lines.slice();
-		out.splice(line + 1, 0, body);
-		return {
-			handled: true,
-			change: lineChange(lines, out),
-			sel: { aLine: line + 1, aCh: body.length, bLine: line + 1, bCh: body.length },
-		};
+		out[line] = p.indent + p.number + " " + head;
+		out.splice(line + 1, 0, hang + tail);
+		const caret = hang.length + tail.length;
+		return { handled: true, change: lineChange(lines, out), sel: { aLine: line + 1, aCh: caret, bLine: line + 1, bCh: caret } };
+	}
+
+	/* An unnumbered line: a body line when a numbered item sits above it. */
+	const lead = /^[ 	]*/.exec(raw)[0];
+	const leadColumns = columns(lead);
+	if (leadColumns === 0) return { handled: false };
+	let parent = -1;
+	for (let i = line - 1; i >= 0; i--) {
+		if (mask[i]) break;
+		const above = lines[i] || "";
+		if (above.trim() === "") continue;
+		const q = core.parseLine(above);
+		if (q) {
+			if (columns(q.indent) < leadColumns) parent = i;
+			break;
+		}
+		if (columns(/^[ 	]*/.exec(above)[0]) < leadColumns) break;
 	}
 	if (parent < 0) return { handled: false };
-	if (raw.trim() !== "") {
-		/* More body text for the same item: keep its column. */
-		if (req.ch < raw.length) return { handled: false };
+	if (bodyMode) {
+		const offset = Math.max(0, Math.min(raw.length - lead.length, req.ch - lead.length));
+		const head = raw.slice(lead.length, lead.length + offset);
+		const tail = raw.slice(lead.length + offset);
 		const out = lines.slice();
-		out.splice(line + 1, 0, lead);
-		return {
-			handled: true,
-			change: lineChange(lines, out),
-			sel: { aLine: line + 1, aCh: lead.length, bLine: line + 1, bCh: lead.length },
-		};
+		out[line] = lead + head;
+		out.splice(line + 1, 0, lead + tail);
+		const caret = lead.length + tail.length;
+		return { handled: true, change: lineChange(lines, out), sel: { aLine: line + 1, aCh: caret, bLine: line + 1, bCh: caret } };
 	}
-	/* An empty body line closes the item: carry on with the next sibling. */
+	if (raw.trim() !== "") return { handled: false };
 	const out = lines.slice();
 	out[line] = core.parseLine(lines[parent]).indent + "0. ";
 	core.renumberRange(out, line, line);
@@ -196,7 +203,7 @@ function handle(req) {
 		case "action":
 			return runAction(req);
 		case "enter":
-			return enterBody(req);
+			return enterKey(req);
 		case "renumber":
 		case "insert":
 		case "remove":

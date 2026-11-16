@@ -85,7 +85,7 @@ with open(os.path.join(home, "mni-server.js"), "w", encoding="utf-8") as f:
 mni_npp._state["paused_until"] = 0
 check("the engine comes back once it is fixed", mni_npp.ask({"op": "ping"}).get("handled"), True)
 
-print("\nEnter asks for a body line")
+print("\nEnter asks for the numbering, Shift+Enter for a body line")
 
 
 class FakeDoc(object):
@@ -112,17 +112,22 @@ mni_npp.ask = lambda req: (asked.append(req), {"handled": True, "change": None, 
 put(b'{"enabled": true}')
 check("body lines are on unless settings.json says no", mni_npp.settings()["enterStartsBody"], True)
 mni_npp.run_key(1, "enter")
-check("Enter asks the engine for a body line", (asked[-1]["op"], asked[-1]["action"]), ("enter", "enter"))
+check("Enter carries on with the numbering", (asked[-1]["op"], asked[-1]["mode"], asked[-1]["action"]), ("enter", "next", "enter"))
+mni_npp.run_key(1, "body")
+check("Shift+Enter asks for a body line", (asked[-1]["op"], asked[-1]["mode"]), ("enter", "body"))
 mni_npp.run_key(1, "indent")
 check("Tab still uses the plain action op", asked[-1]["op"], "action")
 put(b'{"enterStartsBody": false}')
 mni_npp.run_key(1, "enter")
 check("enterStartsBody false goes back to Word's Enter", asked[-1]["op"], "action")
+before_calls = len(asked)
+check("and Shift+Enter is left to the editor", mni_npp.run_key(1, "body"), False)
+check("without asking the engine", len(asked), before_calls)
 mni_npp.Doc, mni_npp.ask, mni_npp._usable = real_doc, real_ask, real_usable
 
 print("\nthe wrap indent")
 put(b'{"enabled": true}')
-check("wrapped lines keep the line's own indent by default", mni_npp.settings()["wrapIndent"], "indent")
+check("wrapped lines keep the line's own indent by default", mni_npp.settings()["wrapIndent"], 5)
 put(b'{"wrapIndent": "deep"}')
 check("deep is kept", mni_npp.settings()["wrapIndent"], "deep")
 put(b'{"wrapIndent": false}')
@@ -152,6 +157,15 @@ before = len(sent)
 mni_npp._apply_wrap_indent(1)
 check("off sends nothing to Scintilla", len(sent), before)
 mni_npp._send = real_send
+
+print("\nthe key mapping")
+real_down = mni_npp._down
+for shift, want in [(False, "enter"), (True, "body")]:
+    mni_npp._down = lambda vk, s=shift: vk == mni_npp.VK_SHIFT and s
+    check("Enter with shift=%s maps to %s" % (shift, want), mni_npp._action_for(mni_npp.WM_KEYDOWN, mni_npp.VK_RETURN), want)
+mni_npp._down = lambda vk, s=False: vk == mni_npp.VK_CONTROL
+check("Ctrl+Enter is left alone", mni_npp._action_for(mni_npp.WM_KEYDOWN, mni_npp.VK_RETURN), None)
+mni_npp._down = real_down
 
 print("\nbig files")
 

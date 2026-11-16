@@ -5,13 +5,14 @@ Run after `python install.py` with a scratch `.txt` file, never a real note.
 
 | Step | Expect |
 |---|---|
-| End of `2) b` under `1.1.1. use`, Enter | a new line with no number, indented under `b` |
-| type `note`, Enter | another body line at the same column |
-| Enter (on the empty body line) | `3) ` at the item's level, caret after the number |
-| type `c` | `3) c` |
-| Enter, Shift+Tab, type `problem` | `1.1.2. problem` |
+| End of `2) b` under `1.1.1. use`, Enter | `3) ` at the item's level, caret after the number |
+| type `c`, then Shift+Enter | a body line under `3) c`: no number, indented to where `c` starts |
+| type `note`, Shift+Enter | another body line at the same column |
+| Shift+Enter mid-line | the text after the caret moves down to the body line |
+| Enter on the empty body line | the item's next number, `4) ` |
+| Shift+Tab, type `problem` | `1.1.2. problem` |
 | Enter, Tab, type `d` | `1) d` (new sub-list) |
-| Enter on the empty body line, type `e` | `2) e` |
+| Enter, type `e` | `2) e` |
 | On `2) e`, Alt+↑ | `1) e` / `2) d` |
 | Ctrl+Z | back to `1) d` / `2) e` |
 | `3) d` / `4) e` written by hand, Python Script → Scripts → Reset numbering | `1) d` / `2) e` |

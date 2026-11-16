@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 (2026-11-12)
+
+Shift+Enter, not Enter, starts the body line, and wrapped text lines up with the number.
+
+- Enter carries on with the numbering again (`1.3.` → `1.4.`), the way it always did. <kbd>Shift</kbd>+<kbd>Enter</kbd> starts the item's body line instead: no number, indented to where the item's text begins, and anything after the caret moves down with it. `"enterStartsBody": false` leaves Shift+Enter to Notepad++.
+- Enter on an empty body line still carries on with the next sibling of the item above, so a description never breaks the list.
+- `wrapIndent` defaults to 5 columns, so a long `1.1.`-style item wraps one column further right and its text lines up; `"indent"` brings back the tab-width behaviour.
+- Tests: 34 engine tests plus 31 for the Python side.
+
 ## 0.2.0 (2026-11-12)
 
 Enter now starts a body line under the item, the way the Obsidian plugin's editor looks.
